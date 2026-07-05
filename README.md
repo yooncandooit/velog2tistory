@@ -50,12 +50,12 @@ Velog GraphQL   ->   다운로드 + GitHub    ->  Playwright로
    *.md 저장          + jsDelivr 링크 치환      Tistory 에디터 발행
 ```
 
-| 단계 | 스크립트 | 자동화 수준 |
-| --- | --- | --- |
-| 추출 | `1_export_velog.py` | 완전 자동 |
-| 이미지 재호스팅 | `2_rehost_images.py` | 완전 자동 |
-| 로그인 세션 저장 | `3_login_tistory.py` | 최초 1회 수동 로그인 |
-| 발행 | `4_publish_tistory.py` | 반자동 (세션 재사용) |
+| 단계             | 스크립트               | 자동화 수준          |
+| ---------------- | ---------------------- | -------------------- |
+| 추출             | `1_export_velog.py`    | 완전 자동            |
+| 이미지 재호스팅  | `2_rehost_images.py`   | 완전 자동            |
+| 로그인 세션 저장 | `3_login_tistory.py`   | 최초 1회 수동 로그인 |
+| 발행             | `4_publish_tistory.py` | 반자동 (세션 재사용) |
 
 ## 요구 사항
 
@@ -82,13 +82,13 @@ playwright install chromium
 cp config.example.py config.py
 ```
 
-| 항목 | 설명 |
-| --- | --- |
-| `VELOG_USERNAME` | Velog 아이디 (`velog.io/@아이디`) |
-| `TISTORY_BLOG` | Tistory 서브도메인 (`서브도메인.tistory.com`) |
-| `GH_USER` / `GH_REPO` / `GH_BRANCH` | 이미지 호스팅용 **public** GitHub 저장소 |
-| `PUBLISH_DELAY_SEC` | 글 사이 발행 간격(초). 너무 짧으면 어뷰징으로 오인될 수 있음 |
-| `HEADLESS` | `True`면 브라우저 창 없이 실행. 처음엔 `False` 권장 |
+| 항목                                | 설명                                                         |
+| ----------------------------------- | ------------------------------------------------------------ |
+| `VELOG_USERNAME`                    | Velog 아이디 (`velog.io/@아이디`)                            |
+| `TISTORY_BLOG`                      | Tistory 서브도메인 (`서브도메인.tistory.com`)                |
+| `GH_USER` / `GH_REPO` / `GH_BRANCH` | 이미지 호스팅용 **public** GitHub 저장소                     |
+| `PUBLISH_DELAY_SEC`                 | 글 사이 발행 간격(초). 너무 짧으면 어뷰징으로 오인될 수 있음 |
+| `HEADLESS`                          | `True`면 브라우저 창 없이 실행. 처음엔 `False` 권장          |
 
 > **이미지 저장소는 반드시 public이어야 합니다.** jsDelivr와 GitHub raw는 private 저장소의 파일을 서빙하지 않습니다.
 
@@ -115,9 +115,9 @@ python 4_publish_tistory.py --confirm
 
 **발행 옵션**
 
-| 옵션 | 설명 |
-| --- | --- |
-| `--limit N` | 앞에서 N개만 발행 |
+| 옵션        | 설명                           |
+| ----------- | ------------------------------ |
+| `--limit N` | 앞에서 N개만 발행              |
 | `--start N` | N번째 글부터 발행 (0부터 시작) |
 | `--confirm` | 글마다 발행 직전에 멈추고 확인 |
 
@@ -129,24 +129,28 @@ python 4_publish_tistory.py --confirm
 <summary><b>마크다운 문법(<code>#</code>, <code>**</code>)이 그대로 노출돼요</b></summary>
 
 마크다운 모드 전환이 실제로는 안 된 채 발행된 경우입니다. 전환 시 뜨는 네이티브 확인창을 스크립트가 자동 수락하도록 되어 있는데, 에디터 UI가 바뀌면 이 부분이 깨질 수 있습니다. `--limit 1`로 실행해 로그와 화면을 확인하세요.
+
 </details>
 
 <details>
 <summary><b>발행하면 본문이 비어 있어요</b></summary>
 
 에디터에 값은 들어갔지만 Tistory의 저장 필드에 동기화되지 않은 경우입니다. 이 프로젝트는 프로그래밍 주입 대신 실제 키보드 입력으로 본문을 채워 이를 방지합니다. 그래도 발생하면 이슈로 알려주세요.
+
 </details>
 
 <details>
 <summary><b>이미지가 404로 안 떠요</b></summary>
 
 이미지 저장소가 <b>private</b>이면 jsDelivr가 서빙하지 못합니다. 저장소를 public으로 바꾸세요. 방금 public으로 전환했다면 CDN 캐시가 갱신될 때까지 몇 분 기다리거나, <code>https://purge.jsdelivr.net/gh/{user}/{repo}@{branch}/{path}</code> 로 캐시를 강제 갱신하세요.
+
 </details>
 
 <details>
 <summary><b>셀렉터를 못 찾는다는 에러가 나요</b></summary>
 
 Tistory 에디터 DOM이 바뀌면 셀렉터가 어긋날 수 있습니다. <code>python 4_publish_tistory.py --limit 1</code> 로 실행하면 브라우저가 열린 채 멈추므로, Playwright Inspector의 <b>Pick locator</b>로 실제 셀렉터를 확인해 수정하거나 이슈로 남겨주세요.
+
 </details>
 
 ## 알려진 한계
