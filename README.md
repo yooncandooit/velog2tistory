@@ -48,12 +48,12 @@ Velog GraphQL   ->   다운로드 + GitHub    ->  Playwright로
    *.md 저장          + jsDelivr 링크 치환      Tistory 에디터 발행
 ```
 
-| 단계             | 스크립트               | 자동화 수준          |
-| ---------------- | ---------------------- | -------------------- |
-| 1. 추출             | `1_export_velog.py`    | 완전 자동            |
-| 2. 이미지 재호스팅  | `2_rehost_images.py`   | 완전 자동            |
+| 단계                | 스크립트               | 자동화 수준               |
+| ------------------- | ---------------------- | ------------------------- |
+| 1. 추출             | `1_export_velog.py`    | 완전 자동                 |
+| 2. 이미지 재호스팅  | `2_rehost_images.py`   | 완전 자동                 |
 | 3. 로그인 세션 저장 | `3_login_tistory.py`   | 최초 1회 수동 로그인 필요 |
-| 4. 발행             | `4_publish_tistory.py` | 반자동 (세션 재사용) |
+| 4. 발행             | `4_publish_tistory.py` | 반자동 (세션 재사용)      |
 
 ## Requirements
 
@@ -80,13 +80,13 @@ playwright install chromium
 cp config.example.py config.py
 ```
 
-| 항목                                | 설명                                                         |
-| ----------------------------------- | ------------------------------------------------------------ |
-| `VELOG_USERNAME`                    | Velog 아이디 (`velog.io/@아이디`)                            |
-| `TISTORY_BLOG`                      | Tistory 서브도메인 (`서브도메인.tistory.com`)                |
-| `GH_USER` / `GH_REPO` / `GH_BRANCH` | 이미지 호스팅용 **public** GitHub 저장소                     |
+| 항목                                | 설명                                                               |
+| ----------------------------------- | ------------------------------------------------------------------ |
+| `VELOG_USERNAME`                    | Velog 아이디 (`velog.io/@아이디`)                                  |
+| `TISTORY_BLOG`                      | Tistory 서브도메인 (`서브도메인.tistory.com`)                      |
+| `GH_USER` / `GH_REPO` / `GH_BRANCH` | 이미지 호스팅용 **public** GitHub 저장소                           |
 | `PUBLISH_DELAY_SEC`                 | 글 사이 발행 간격(초). (너무 짧으면 어뷰징으로 오인될 수 있습니다) |
-| `HEADLESS`                          | `True`면 브라우저 창 없이 실행. 처음엔 `False` 권장          |
+| `HEADLESS`                          | `True`면 브라우저 창 없이 실행. 처음엔 `False` 권장                |
 
 > **!! 주의 !!**: **이미지 저장소는 반드시 public이어야 합니다.** jsDelivr와 GitHub raw는 private 저장소의 파일을 서빙하지 않습니다.
 
@@ -121,6 +121,27 @@ python 4_publish_tistory.py --confirm
 
 글은 **작성일 기준 오름차순**(오래된 글 → 최근 글)으로 발행되어, Tistory에서도 시간 순서가 유지됩니다.
 
+### (Updated) 새 글만 이어서 발행하기
+
+발행에 성공한 글은 `published.json`에 기록되고, 다음 실행 때 **자동으로 건너뜁니다.** 따라서 Velog에 새 글을 쓴 뒤에는 같은 명령을 다시 실행하기만 하면 새 글만 올라갑니다.
+
+```bash
+python 1_export_velog.py                # 새 글 포함 재추출
+python 2_rehost_images.py               # 새 이미지만 처리
+python 4_publish_tistory.py --dry-run   # 어떤 글이 올라갈지 미리 확인
+python 4_publish_tistory.py             # 새 글만 발행
+```
+
+기록은 파일명(slug) 기준이며, 발행에 실제로 성공한 글만 추가됩니다. 본문이 비었거나 도중에 실패한 글은 기록되지 않아 다음 실행 때 다시 시도합니다.
+
+> `published.json`은 로컬 발행 상태라 `.gitignore`에 포함되어 있습니다. 이 파일을 지우면 모든 글이 다시 발행 대상이 되니 주의하세요.
+
+**이미 수동으로 옮긴 글이 있다면**, 아래처럼 현재 글 전체를 발행 완료로 표시한 뒤 새 글부터 이어갈 수 있습니다.
+
+```bash
+python -c "import json, glob, os; json.dump(sorted(os.path.splitext(os.path.basename(f))[0] for f in glob.glob('velog_export/*.md')), open('published.json','w'), ensure_ascii=False, indent=2)"
+```
+
 ## Troubleshooting & FAQ
 
 <details>
@@ -152,6 +173,7 @@ Tistory 에디터 DOM이 바뀌면 셀렉터가 어긋날 수 있습니다. <cod
 </details>
 
 <a id="contributing"></a>
+
 ## 🌱 Contributing
 
 ### Known Limitations
@@ -160,7 +182,7 @@ Tistory 에디터 DOM이 바뀌면 셀렉터가 어긋날 수 있습니다. <cod
 - 이미지는 Velog CDN에서 내려받아 GitHub로 재호스팅하며, Tistory 자체 이미지 서버로는 올리지 않습니다.
 - 대량 연속 발행은 어뷰징으로 오인될 수 있으니 `PUBLISH_DELAY_SEC`를 충분히 둬 주세요.
 
-버그나 개선점을 발견하면 [이슈](https://github.com/yooncandooit/velog2tistory/issues)를 남겨주세요! 특히 **Tistory 에디터 셀렉터 변경**은 재현 환경(브라우저, 날짜)와 함께 알려주시면 빠르게 대응할 수 있으며, PR도 환영합니다. 🙂 
+버그나 개선점을 발견하면 [이슈](https://github.com/yooncandooit/velog2tistory/issues)를 남겨주세요! 특히 **Tistory 에디터 셀렉터 변경**은 재현 환경(브라우저, 날짜)와 함께 알려주시면 빠르게 대응할 수 있으며, PR도 환영합니다. 🙂
 
 ## Disclaimer
 

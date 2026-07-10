@@ -2,12 +2,16 @@
 
 이미지는 2단계에서 CDN 링크로 치환되어 있다고 가정한다.
 글은 프런트매터 date 기준 오름차순(오래된 글 -> 최근 글)으로 발행한다.
+발행에 성공한 글은 published.json에 기록되어 다음 실행 때 자동으로 건너뛴다.
 
+    python 4_publish_tistory.py                        # 아직 발행하지 않은 글만
+    python 4_publish_tistory.py --dry-run              # 발행 대상만 미리 확인
     python 4_publish_tistory.py --limit 1              # 첫 글만 테스트
     python 4_publish_tistory.py --confirm              # 글마다 발행 전 확인
-    python 4_publish_tistory.py --start 5 --limit 10   # 6번째부터 10개
+    python 4_publish_tistory.py --all                  # 이력 무시하고 전체 발행
 """
 import argparse
+import json
 import time
 from pathlib import Path
 
@@ -16,8 +20,26 @@ from playwright.sync_api import sync_playwright
 import config
 
 STATE_FILE = "tistory_state.json"
+HISTORY_FILE = Path("published.json")
 NEWPOST_URL = f"https://{config.TISTORY_BLOG}.tistory.com/manage/newpost/"
 MARKDOWN_CM = ".CodeMirror.cm-s-tistory-markdown"
+
+
+def load_history():
+    if not HISTORY_FILE.exists():
+        return set()
+    try:
+        return set(json.loads(HISTORY_FILE.read_text(encoding="utf-8")))
+    except (json.JSONDecodeError, TypeError):
+        print(f"경고: {HISTORY_FILE}를 읽을 수 없어 빈 이력으로 시작합니다.")
+        return set()
+
+
+def save_history(published):
+    HISTORY_FILE.write_text(
+        json.dumps(sorted(published), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
 
 def parse_markdown(text):
@@ -63,6 +85,7 @@ def body_length(page):
 
 
 def publish_one(page, title, body, confirm):
+    """발행에 성공하면 True, 본문이 비어 건너뛰었으면 False를 반환한다."""
     page.goto(NEWPOST_URL)
     page.wait_for_load_state("networkidle")
 
@@ -80,7 +103,7 @@ def publish_one(page, title, body, confirm):
     print(f"  body length: {length}")
     if length < 5:
         print("  skip: body appears empty")
-        return
+        return False
 
     if confirm:
         input(f'  publish "{title}"? Enter to continue, Ctrl+C to stop: ')
@@ -89,11 +112,23 @@ def publish_one(page, title, body, confirm):
     time.sleep(1)
     page.get_by_role("button", name="공개 발행").click()
     time.sleep(3)
+    return True
 
 
-def load_files():
+def collect_targets(args, published):
+    """발행 대상을 date 오름차순으로 고른다. 이력에 있는 글은 제외한다."""
     files = list(Path(config.EXPORT_DIR).glob("*.md"))
     files.sort(key=lambda p: parse_markdown(p.read_text(encoding="utf-8"))[1])
+
+    if not args.all:
+        skipped = [f for f in files if f.stem in published]
+        files = [f for f in files if f.stem not in published]
+        if skipped:
+            print(f"이미 발행된 글 {len(skipped)}개를 건너뜁니다.")
+
+    files = files[args.start:]
+    if args.limit:
+        files = files[:args.limit]
     return files
 
 
@@ -102,24 +137,37 @@ def main():
     parser.add_argument("--start", type=int, default=0)
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--confirm", action="store_true")
+    parser.add_argument("--all", action="store_true",
+                        help="발행 이력을 무시하고 모든 글을 발행")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="실제 발행 없이 대상 글만 출력")
     args = parser.parse_args()
 
-    files = load_files()[args.start:]
-    if args.limit:
-        files = files[:args.limit]
-    if not files:
-        raise SystemExit("발행할 글이 없습니다. 1단계를 먼저 실행하세요.")
+    published = load_history()
+    targets = collect_targets(args, published)
+
+    if not targets:
+        raise SystemExit("발행할 새 글이 없습니다.")
+
+    if args.dry_run:
+        print(f"발행 대상 {len(targets)}개:")
+        for md in targets:
+            title, date, _ = parse_markdown(md.read_text(encoding="utf-8"))
+            print(f"  {date[:10]}  {title}")
+        return
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=config.HEADLESS)
         context = browser.new_context(storage_state=STATE_FILE)
         page = context.new_page()
-        for i, md in enumerate(files, start=1):
+        for i, md in enumerate(targets, start=1):
             title, _, body = parse_markdown(md.read_text(encoding="utf-8"))
-            print(f"[{i}/{len(files)}] {title}")
+            print(f"[{i}/{len(targets)}] {title}")
             try:
-                publish_one(page, title, body, args.confirm)
-                print("  published")
+                if publish_one(page, title, body, args.confirm):
+                    published.add(md.stem)
+                    save_history(published)
+                    print("  published")
             except Exception as e:
                 print(f"  failed: {e}")
             time.sleep(config.PUBLISH_DELAY_SEC)

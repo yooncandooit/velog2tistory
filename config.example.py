@@ -12,7 +12,7 @@ TISTORY_BLOG = "your_blog"                       # your_blog.tistory.com 의 서
 
 # 이미지 재호스팅 (jsDelivr가 서빙할 public GitHub 저장소)
 GH_USER = "your_github_id"
-GH_REPO = "your_image_repo"                      # 반드시 public
+GH_REPO = "your_image_repo"                      # 레포는 반드시 public으로 설정해 주세요!
 GH_BRANCH = "main"
 
 # 로컬 경로
