@@ -4,6 +4,9 @@ tistory_state.json
 # 개인 설정
 config.py
 
+# 발행 이력 (로컬 상태)
+published.json
+
 # 추출/생성물 (개인 콘텐츠)
 velog_export/
 assets/
