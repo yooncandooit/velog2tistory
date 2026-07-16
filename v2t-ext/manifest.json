@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "velog2tistory",
+  "version": "0.2.3",
+  "permissions": ["scripting", "storage"],
+  "host_permissions": [
+    "https://velog.velcdn.com/*",
+    "https://v2.velog.io/*",
+    "https://v3.velog.io/*",
+    "https://*.tistory.com/*"
+  ],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_popup": "popup.html" },
+  "content_scripts": [{
+    "matches": ["https://*.tistory.com/manage/*"],
+    "js": ["content.js"]
+  }]
+}
