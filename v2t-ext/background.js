@@ -1,5 +1,3 @@
-// background.js - velog fetch(단건/전체) + 이미지 fetch + main world 실행 + 큐/이력 저장
-
 const VELOG_ENDPOINTS = [
   "https://v3.velog.io/graphql",
   "https://v2.velog.io/graphql",
@@ -47,7 +45,6 @@ async function fetchVelogPost(velogUrl) {
   return data.post;
 }
 
-/** 전체 글 목록 (페이지네이션) - 본문까지 한 번에 가져와 큐에 그대로 담는다 */
 async function fetchAllPosts(username) {
   const posts = [];
   let cursor = null;
@@ -69,13 +66,11 @@ async function fetchAllPosts(username) {
     if (batch.length === 0) break;
     posts.push(...batch);
     cursor = batch[batch.length - 1].id;
-    if (!cursor) break; // id 없이 오면 무한루프 방지
+    if (!cursor) break;
   }
-  posts.sort((a, b) => new Date(a.released_at) - new Date(b.released_at)); // 오래된 글 -> 최신
+  posts.sort((a, b) => new Date(a.released_at) - new Date(b.released_at));
   return posts;
 }
-
-// ── main world 함수들 ────────────────────────────────────
 
 function readBodyMainWorld() {
   const el = [
@@ -92,17 +87,30 @@ function injectBodyMainWorld(text) {
   ].find((e) => e.offsetParent !== null);
   if (!el || !el.CodeMirror)
     return { ok: false, error: "보이는 마크다운 CM 없음" };
+
   const cm = el.CodeMirror;
-  const lastLine = cm.lastLine();
-  cm.replaceRange(
-    text,
-    { line: 0, ch: 0 },
-    { line: lastLine, ch: cm.getLine(lastLine).length },
-    "+input",
-  );
-  cm.setCursor({ line: 0, ch: 0 });
+  cm.setValue(text);
   cm.refresh();
   cm.focus();
+
+  if (typeof cm.save === "function") {
+    cm.save();
+  }
+
+  const inputEl = cm.getInputField();
+  if (inputEl) {
+    inputEl.focus();
+    inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+    inputEl.dispatchEvent(new Event("change", { bubbles: true }));
+
+    try {
+      document.execCommand("insertText", false, " ");
+      document.execCommand("delete");
+    } catch (e) {
+      console.warn("[v2t] React trigger error:", e);
+    }
+  }
+
   return { ok: true, length: cm.getValue().length };
 }
 
@@ -115,7 +123,6 @@ function refreshBodyMainWorld() {
   return { ok: true };
 }
 
-/** 모드 전환: confirm은 이 실행 동안만 우회하고 즉시 원복(try/finally) */
 function switchToMarkdownMainWorld() {
   const originalConfirm = window.confirm;
   try {
@@ -137,7 +144,7 @@ function switchToMarkdownMainWorld() {
         }
         item.click();
         setTimeout(() => {
-          window.confirm = originalConfirm; // 반드시 원복
+          window.confirm = originalConfirm;
           const switched = !!document.querySelector(
             ".CodeMirror.cm-s-tistory-markdown",
           );
@@ -154,9 +161,7 @@ function switchToMarkdownMainWorld() {
   }
 }
 
-/** 완료 -> (autoConfirm이면) 공개 발행까지 클릭 */
 function publishMainWorld(autoConfirm) {
-  // 안전장치: 발행 직전 CM에 실제로 값이 있는지 마지막으로 한 번 더 확인
   const cmEl = [
     ...document.querySelectorAll(".CodeMirror.cm-s-tistory-markdown"),
   ].find((e) => e.offsetParent !== null);
@@ -196,8 +201,6 @@ function runMain(tabId, func, args) {
     .catch((e) => ({ ok: false, error: `executeScript 예외: ${e.message}` }));
 }
 
-// ── 큐 / 이력 (chrome.storage.local) ─────────────────────
-
 async function getState() {
   const { v2tState } = await chrome.storage.local.get("v2tState");
   const defaultState = {
@@ -207,8 +210,8 @@ async function getState() {
     published: [],
     autoConfirm: false,
     running: false,
-    waitingPublish: false, // 수동 발행 상태 대기 여부
-    skipPublished: true, // 이미 발행한 글 건너뛰기 기본값 ON
+    waitingPublish: false,
+    skipPublished: true,
   };
   if (!v2tState) return defaultState;
   return { ...defaultState, ...v2tState };
@@ -216,8 +219,6 @@ async function getState() {
 async function setState(state) {
   await chrome.storage.local.set({ v2tState: state });
 }
-
-// ── 메시지 핸들러 ─────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   switch (msg.type) {
@@ -266,7 +267,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       );
       return true;
 
-    // ── 큐 관리 ──
     case "FETCH_ALL_POSTS":
       fetchAllPosts(msg.username)
         .then((posts) => sendResponse({ ok: true, posts }))
@@ -297,7 +297,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const state = await getState();
         if (!state.published.includes(msg.slug)) state.published.push(msg.slug);
         state.index += 1;
-        state.waitingPublish = false; // 발행 완료했으므로 대기 해제
+        state.waitingPublish = false;
         await setState(state);
         sendResponse({ ok: true, state });
       })();

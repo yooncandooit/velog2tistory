@@ -1,9 +1,6 @@
-// content.js - v0.2.2: 단건 이전 + 전체 큐 자동 이전 + 수동 발행 버그 수정
-
 const CM_SEL = ".CodeMirror.cm-s-tistory-markdown";
 const NEWPOST_PATH = "/manage/newpost/";
 
-// ── 상태창 ──────────────────────────────────────────────
 function status(msg, opts = {}) {
   let box = document.getElementById("v2t-status");
   if (!box) {
@@ -44,7 +41,6 @@ function status(msg, opts = {}) {
   console.log("[v2t]", msg);
 }
 
-// ── 헬퍼 ────────────────────────────────────────────────
 function waitFor(checkFn, desc, timeout = 90000) {
   return new Promise((resolve, reject) => {
     const t0 = Date.now();
@@ -76,6 +72,7 @@ async function fetchImageFile(url) {
   const ext = (resp.type.split("/")[1] || "png").replace("jpeg", "jpg");
   return new File([blob], `migrated.${ext}`, { type: resp.type });
 }
+
 function uploadedSrcs(doc) {
   return new Set(
     [...doc.querySelectorAll("img")]
@@ -83,6 +80,7 @@ function uploadedSrcs(doc) {
       .filter((s) => s.includes("kakaocdn")),
   );
 }
+
 function pasteFile(target, file) {
   const dt = new DataTransfer();
   dt.items.add(file);
@@ -94,6 +92,7 @@ function pasteFile(target, file) {
     }),
   );
 }
+
 function extractVelcdnUrls(md) {
   const seen = new Set(),
     out = [];
@@ -105,11 +104,13 @@ function extractVelcdnUrls(md) {
   }
   return out;
 }
+
 function extractTistoryUrls(md) {
   return [
     ...md.matchAll(/https?:\/\/[^\s)"']*(?:kakaocdn|daumcdn)[^\s)"']*/g),
   ].map((m) => m[0]);
 }
+
 function setTitle(title) {
   const el = document.querySelector(
     'textarea[placeholder*="제목"], input[placeholder*="제목"]',
@@ -124,7 +125,6 @@ function setTitle(title) {
   return true;
 }
 
-/** 새 글 페이지로 이동 후 로드 대기 (같은 탭 리로드) */
 function goToNewPost() {
   return new Promise((resolve) => {
     location.href = `${location.origin}${NEWPOST_PATH}`;
@@ -132,7 +132,6 @@ function goToNewPost() {
   });
 }
 
-/** /manage/posts/ 등에서 "글쓰기" 버튼을 찾아 클릭 (없으면 URL 직접 이동으로 폴백) */
 function clickWriteButtonOrNavigate() {
   const btn = [...document.querySelectorAll("a, button")].find((el) => {
     const label = (el.textContent || "").trim();
@@ -147,7 +146,6 @@ function clickWriteButtonOrNavigate() {
   }
 }
 
-// ── 한 편의 글을 처리(업로드 → 모드전환 → 주입 → 완료/발행) ──
 function dismissDraftPopup() {
   for (const label of ["취소", "닫기", "새 글 작성"]) {
     const btn = [...document.querySelectorAll("button")].find(
@@ -216,6 +214,9 @@ async function migratePost({ title, body }, opts = {}) {
         `자동 전환 실패(${sw.error}) - 직접 [기본모드→마크다운] 전환해주세요`,
       );
       await waitFor(visibleCm, "마크다운 모드 전환", 180000);
+    } else {
+      status("에디터 안정화 및 리스너 등록 대기 중...");
+      await new Promise((r) => setTimeout(r, 1200));
     }
   } else {
     status("이제 [기본모드 → 마크다운]으로 전환해주세요 (팝업은 확인)");
@@ -301,7 +302,6 @@ async function migratePost({ title, body }, opts = {}) {
   return { published: true };
 }
 
-// ── 단건 이전 ────────────────────────────────────────────
 async function migrateOne(velogUrl) {
   try {
     status("velog 글 가져오는 중...");
@@ -322,7 +322,6 @@ async function migrateOne(velogUrl) {
   }
 }
 
-// ── 전체 큐 이전 ─────────────────────────────────────────
 async function runQueue() {
   const { state } = await chrome.runtime.sendMessage({ type: "GET_STATE" });
   if (!state.running || state.index >= state.queue.length) {
@@ -330,7 +329,6 @@ async function runQueue() {
     return;
   }
 
-  // 큐를 정상적으로 재실행하는 것이라면 발행 대기 flag를 해제
   if (state.waitingPublish) {
     await chrome.runtime.sendMessage({
       type: "SET_WAITING_PUBLISH",
@@ -340,7 +338,6 @@ async function runQueue() {
 
   const post = state.queue[state.index];
 
-  // 이미 발행한 글 건너뛰기 설정 확인
   if (state.skipPublished && state.published.includes(post.url_slug)) {
     await chrome.runtime.sendMessage({
       type: "MARK_PUBLISHED",
@@ -367,7 +364,6 @@ async function runQueue() {
       );
       goToNewPost();
     } else {
-      // 수동 발행 상태 진입: background.js에 대기 플래그 등록
       await chrome.runtime.sendMessage({
         type: "SET_WAITING_PUBLISH",
         waitingPublish: true,
@@ -404,32 +400,27 @@ async function runQueue() {
   }
 }
 
-// ── 메시지 수신 ──────────────────────────────────────────
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === "MIGRATE_ONE") migrateOne(msg.velogUrl);
   if (msg.type === "RUN_QUEUE") runQueue();
 });
 
-// ── 페이지 로드 시: 진행 중인 자동 큐가 있으면 이어서 실행 ──
 (async () => {
-  console.log("[v2t] v0.2.2 로드됨:", location.pathname);
+  console.log("[v2t] 로드됨:", location.pathname);
   const { state } = await chrome.runtime.sendMessage({ type: "GET_STATE" });
   if (!state.running || state.index >= state.queue.length) return;
 
-  // 버그 수정: 수동 발행 후 목록 화면(/manage/posts 등)으로 강제 리로드된 상황을 감지
   if (state.waitingPublish && !location.pathname.startsWith(NEWPOST_PATH)) {
     const post = state.queue[state.index];
     status(
-      `이전 글 "${post.title}" 발행 완료를 확인했습니다! 다음 단계로 넘어갑니다.`,
+      `이전 글 "${post.title}" 발행 완료 확인! 다음 글로 연속 이전을 진행합니다.`,
     );
 
-    // 발행 완료 체크 (index 증가 및 이력 저장)
     await chrome.runtime.sendMessage({
       type: "MARK_PUBLISHED",
       slug: post.url_slug,
     });
 
-    // 상태 갱신 확인 후 다음 작업 진행
     const { state: newState } = await chrome.runtime.sendMessage({
       type: "GET_STATE",
     });
